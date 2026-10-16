@@ -1,0 +1,9 @@
+# # Yil kiritilsa uni kabisa yoki yo'qligini aniqlash dasturi
+# Yil=int(input("Yilni kiriting: "))
+# KabisaYili=(Yil%4==0 and Yil%100!=0) or (Yil%400==0)
+# print(KabisaYili)
+ism="Alisher"
+yoshi=int(input("ALisherni yoshini kiriting: "))
+print("Ismi="+ism+" yoshi="+str(yoshi))
+print("Ismi",ism, " yoshi", yoshi)
+print(f"Ismi {ism} yoshi {yoshi}")
