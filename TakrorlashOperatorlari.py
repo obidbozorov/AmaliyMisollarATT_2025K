@@ -18,26 +18,42 @@
 #     print(i)
     
 # print("1 dan 10 gacha sonlar chiqarildi")
-OqYaktakli=0
-KukYaktakli=0
-vaqt=0
+# OqYaktakli=0
+# KukYaktakli=0
+# vaqt=0
+# while True:
+#     vaqt+=1
+#     KukYaktakli+=int(input("Kuk yaktakli bali: "))
+#     OqYaktakli+=int(input("Oq yaktakli bali: "))
+#     if vaqt<=300:
+#         if KukYaktakli>=100:
+#             print("Kuk yaktakli G'olib bo'ldi, IPPON")
+#             break
+#         if OqYaktakli>=100:
+#             print("Oq yaktakli G'olib bo'ldi")
+#             break
+#     else:
+#         KukYaktakli+=int(input("Kuk yaktakli bali: "))
+#         OqYaktakli+=int(input("Oq yaktakli bali: "))
+#         if KukYaktakli>=0:
+#             print("Kuk yaktakli G'olib bo'ldi")
+#             break
+#         if OqYaktakli>=0:
+#             print("Oq yaktakli G'olib bo'ldi")
+#             break
+sir = 37
+urinish = 0
 while True:
-    vaqt+=1
-    KukYaktakli+=int(input("Kuk yaktakli bali: "))
-    OqYaktakli+=int(input("Oq yaktakli bali: "))
-    if vaqt<=300:
-        if KukYaktakli>=100:
-            print("Kuk yaktakli G'olib bo'ldi, IPPON")
-            break
-        if OqYaktakli>=100:
-            print("Oq yaktakli G'olib bo'ldi")
-            break
+    try:
+        t = int(input("Taxmin: "))
+    except ValueError:
+        print("Son kiriting!")
+        continue
+    urinish += 1
+    if t < sir:
+        print("Kattaroq")
+    elif t > sir:
+        print("Kichikroq")
     else:
-        KukYaktakli+=int(input("Kuk yaktakli bali: "))
-        OqYaktakli+=int(input("Oq yaktakli bali: "))
-        if KukYaktakli>=0:
-            print("Kuk yaktakli G'olib bo'ldi")
-            break
-        if OqYaktakli>=0:
-            print("Oq yaktakli G'olib bo'ldi")
-            break
+        print(f"Topdingiz! {urinish} urinishda")
+        break
