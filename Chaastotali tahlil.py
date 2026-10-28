@@ -1,4 +1,5 @@
-# Matnlarning chastotalarini hisoblash
+# Matnlarning chastotalarini hisoblash  
+# Yangi matnlarni tahlil qilish uchun dastur. Bu dastur matndagi harflarning chastotasini hisoblaydi va ularni kamayish tartibida chiqaradi.
 def chastotalarni_hisoblash(matn):
     # Har bir harfning chastotasini hisoblash uchun lug'at yaratish
     chastotalar = {}
