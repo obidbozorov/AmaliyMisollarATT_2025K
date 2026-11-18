@@ -6,6 +6,7 @@ import errno
 import queue
 import threading
 import tkinter as tk
+from dataclasses import dataclass
 from datetime import datetime
 from tkinter import messagebox, ttk
 from typing import Any
@@ -37,6 +38,14 @@ def _describe_connection_error(host: str, port: int, error: OSError) -> str:
     return f"{address} serveriga ulanib bo‘lmadi: {error}"
 
 
+@dataclass
+class PrivateChatView:
+    window: tk.Toplevel
+    chat: tk.Text
+    message_var: tk.StringVar
+    send_button: ttk.Button
+
+
 class MessengerClient:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
@@ -51,6 +60,8 @@ class MessengerClient:
         self.worker: threading.Thread | None = None
         self.connected = False
         self.username = ""
+        self.private_histories: dict[str, list[dict[str, Any]]] = {}
+        self.private_windows: dict[str, PrivateChatView] = {}
         self._build_ui()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.after(100, self._process_events)
@@ -99,6 +110,9 @@ class MessengerClient:
         content.pack(fill="both", expand=True)
         chat_frame = ttk.Frame(content)
         chat_frame.pack(side="left", fill="both", expand=True)
+        ttk.Label(chat_frame, text="Umumiy chat", font=("Segoe UI", 11, "bold")).pack(
+            anchor="w", pady=(0, 6)
+        )
         self.chat = tk.Text(
             chat_frame,
             state="disabled",
@@ -135,12 +149,19 @@ class MessengerClient:
         self.user_list.selection_set(0)
         ttk.Label(
             sidebar,
-            text="Shaxsiy xabar uchun\nfoydalanuvchini tanlang.",
+            text="Foydalanuvchini ikki marta\nbosing yoki tugmani bosing.",
             justify="center",
         ).pack(pady=(8, 0))
+        ttk.Button(
+            sidebar,
+            text="Shaxsiy chatni ochish",
+            command=self._open_selected_private_chat,
+        ).pack(fill="x", pady=(8, 0))
+        self.user_list.bind("<Double-Button-1>", self._open_selected_private_chat)
 
         compose = ttk.Frame(self.root, padding=(18, 0, 18, 18))
         compose.pack(fill="x")
+        ttk.Label(compose, text="Umumiy xabar").pack(side="left", padx=(0, 8))
         self.message_var = tk.StringVar()
         self.message_entry = ttk.Entry(compose, textvariable=self.message_var)
         self.message_entry.pack(side="left", fill="x", expand=True)
@@ -260,17 +281,7 @@ class MessengerClient:
         text = self.message_var.get().strip()
         if not text or not self.connected:
             return "break"
-        selected = self.user_list.curselection()
-        recipient = self.user_list.get(selected[0]) if selected else "Hamma (umumiy chat)"
-        if recipient == "Hamma (umumiy chat)":
-            payload = {"type": "broadcast", "message": text}
-        else:
-            payload = {
-                "type": "private_message",
-                "receiver": recipient,
-                "message": text,
-            }
-        self.outgoing.put(payload)
+        self.outgoing.put({"type": "broadcast", "message": text})
         self.message_var.set("")
         return "break"
 
@@ -289,6 +300,7 @@ class MessengerClient:
                     self.connect_button.configure(state="normal")
                     self.disconnect_button.configure(state="disabled")
                     self.send_button.configure(state="disabled")
+                    self._set_private_send_state("disabled")
                     if self.status_label.cget("text") != "Aloqa uzildi":
                         self.status_label.configure(text="Ulanmagan")
                 elif event == "connecting":
@@ -305,10 +317,14 @@ class MessengerClient:
             self.connect_button.configure(state="disabled")
             self.disconnect_button.configure(state="normal")
             self.send_button.configure(state="normal")
+            self._set_private_send_state("normal")
             self.message_entry.focus_set()
         elif kind == "history":
             for item in message.get("messages", []):
-                self._display_chat_message(item)
+                if item.get("message_type", item.get("type")) == "private_message":
+                    self._store_private_message(item, open_if_missing=False)
+                else:
+                    self._display_chat_message(item)
         elif kind == "user_list":
             selected = self.user_list.curselection()
             previous = self.user_list.get(selected[0]) if selected else None
@@ -338,18 +354,156 @@ class MessengerClient:
     def _display_chat_message(self, message: dict[str, Any]) -> None:
         sender = message.get("sender", "?")
         kind = message.get("message_type", message.get("type"))
-        receiver = message.get("receiver")
+        if kind == "private_message":
+            self._store_private_message(message, open_if_missing=True)
+            return
         label = "Men" if sender == self.username else sender
-        if kind == "private_message" and receiver:
-            other = receiver if sender == self.username else sender
-            label = f"{label} → {other} (shaxsiy)"
         self._append(
             f"{label}: {message.get('message', '')}",
             "mine" if sender == self.username else "other",
             message.get("timestamp"),
         )
 
+    def _store_private_message(
+        self, message: dict[str, Any], open_if_missing: bool
+    ) -> None:
+        peer = self._private_peer(message)
+        if peer is None:
+            return
+        history = self.private_histories.setdefault(peer, [])
+        message_id = message.get("id")
+        if message_id is not None and any(
+            existing.get("id") == message_id for existing in history
+        ):
+            return
+        history.append(message)
+
+        view = self.private_windows.get(peer)
+        if view is not None:
+            self._append_private_message(view.chat, message)
+        elif open_if_missing:
+            self._open_private_chat(peer)
+
+    def _private_peer(self, message: dict[str, Any]) -> str | None:
+        sender = message.get("sender")
+        receiver = message.get("receiver")
+        if sender == self.username and isinstance(receiver, str):
+            return receiver
+        if receiver == self.username and isinstance(sender, str):
+            return sender
+        return None
+
+    def _open_selected_private_chat(
+        self, _event: tk.Event | None = None
+    ) -> str | None:
+        selection = self.user_list.curselection()
+        if not selection:
+            return "break" if _event is not None else None
+        peer = self.user_list.get(selection[0])
+        if peer != "Hamma (umumiy chat)" and peer != self.username:
+            self._open_private_chat(peer)
+        return "break" if _event is not None else None
+
+    def _open_private_chat(self, peer: str) -> PrivateChatView:
+        existing = self.private_windows.get(peer)
+        if existing is not None and existing.window.winfo_exists():
+            existing.window.lift()
+            existing.window.focus_force()
+            return existing
+
+        window = tk.Toplevel(self.root)
+        window.title(f"Shaxsiy chat — {peer}")
+        window.geometry("520x440")
+        window.minsize(380, 320)
+        window.configure(bg="#f3f5f9")
+
+        chat_frame = ttk.Frame(window, padding=(12, 12, 12, 0))
+        chat_frame.pack(fill="both", expand=True)
+        chat = tk.Text(
+            chat_frame,
+            state="disabled",
+            wrap="word",
+            font=("Segoe UI", 10),
+            bg="white",
+            fg="#172033",
+            relief="flat",
+            padx=12,
+            pady=10,
+        )
+        scrollbar = ttk.Scrollbar(chat_frame, command=chat.yview)
+        chat.configure(yscrollcommand=scrollbar.set)
+        chat.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        chat.tag_configure("mine", justify="right", foreground="#175cd3")
+        chat.tag_configure("other", justify="left", foreground="#172033")
+
+        compose = ttk.Frame(window, padding=12)
+        compose.pack(fill="x")
+        message_var = tk.StringVar(master=window)
+        entry = ttk.Entry(compose, textvariable=message_var)
+        entry.pack(side="left", fill="x", expand=True)
+        send_button = ttk.Button(
+            compose,
+            text="Yuborish",
+            command=lambda: self._send_private_message(peer),
+            state="normal" if self.connected else "disabled",
+        )
+        send_button.pack(side="left", padx=(8, 0))
+        view = PrivateChatView(window, chat, message_var, send_button)
+        self.private_windows[peer] = view
+        entry.bind("<Return>", lambda _event: self._send_private_message(peer))
+        window.protocol(
+            "WM_DELETE_WINDOW", lambda peer=peer: self._close_private_chat(peer)
+        )
+        for message in self.private_histories.get(peer, []):
+            self._append_private_message(chat, message)
+        entry.focus_set()
+        return view
+
+    def _close_private_chat(self, peer: str) -> None:
+        view = self.private_windows.pop(peer, None)
+        if view is not None:
+            view.window.destroy()
+
+    def _send_private_message(self, peer: str) -> str:
+        view = self.private_windows.get(peer)
+        if view is None or not self.connected:
+            return "break"
+        text = view.message_var.get().strip()
+        if not text:
+            return "break"
+        self.outgoing.put(
+            {"type": "private_message", "receiver": peer, "message": text}
+        )
+        view.message_var.set("")
+        return "break"
+
+    def _set_private_send_state(self, state: str) -> None:
+        for view in self.private_windows.values():
+            view.send_button.configure(state=state)
+
+    def _append_private_message(
+        self, chat: tk.Text, message: dict[str, Any]
+    ) -> None:
+        sender = message.get("sender", "?")
+        label = "Men" if sender == self.username else sender
+        self._append_to_chat(
+            chat,
+            f"{label}: {message.get('message', '')}",
+            "mine" if sender == self.username else "other",
+            message.get("timestamp"),
+        )
+
     def _append(self, text: str, tag: str, timestamp: str | None = None) -> None:
+        self._append_to_chat(self.chat, text, tag, timestamp)
+
+    def _append_to_chat(
+        self,
+        chat: tk.Text,
+        text: str,
+        tag: str,
+        timestamp: str | None = None,
+    ) -> None:
         display_time = ""
         if timestamp:
             try:
@@ -357,10 +511,10 @@ class MessengerClient:
             except ValueError:
                 display_time = timestamp
         line = f"{display_time}  {text}" if display_time else text
-        self.chat.configure(state="normal")
-        self.chat.insert(tk.END, line + "\n\n", tag)
-        self.chat.configure(state="disabled")
-        self.chat.see(tk.END)
+        chat.configure(state="normal")
+        chat.insert(tk.END, line + "\n\n", tag)
+        chat.configure(state="disabled")
+        chat.see(tk.END)
 
     def _on_close(self) -> None:
         if self.connected:

@@ -34,7 +34,7 @@ Windows 10/11 va Python 3.11+ uchun lokal tarmoqda ishlaydigan, asyncio asosidag
    py -3.11 client.py --host 192.168.1.100 --port 5000
    ```
 
-   Umumiy xabar uchun “Hamma” tanlangan bo‘lsin. Shaxsiy xabar yuborish uchun ro‘yxatdan onlayn foydalanuvchini tanlang. Enter xabarni yuboradi. Ulanish uzilgach, o‘sha oynadagi “Ulanish” tugmasi orqali qayta ulanish mumkin.
+   Umumiy xabarlar asosiy chat oynasida yuboriladi. Shaxsiy suhbat uchun onlayn foydalanuvchini ikki marta bosing yoki uni tanlab **Shaxsiy chatni ochish** tugmasini bosing. Har bir foydalanuvchi bilan yozishma alohida oynada ko‘rinadi; yangi shaxsiy xabar kelsa, tegishli oyna avtomatik ochiladi. Yopilgan oynani suhbatdoshni qayta tanlab ochish mumkin, tarix saqlanadi. Ulanish uzilgach, asosiy oynadagi **Ulanish** tugmasi orqali qayta ulanish mumkin.
 
 ## Windows Firewall
 

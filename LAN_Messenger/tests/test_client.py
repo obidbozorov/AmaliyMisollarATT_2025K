@@ -1,7 +1,7 @@
 import asyncio
 import unittest
 
-from client import _describe_connection_error
+from client import MessengerClient, _describe_connection_error
 
 
 class ConnectionErrorMessageTests(unittest.TestCase):
@@ -20,6 +20,30 @@ class ConnectionErrorMessageTests(unittest.TestCase):
 
         self.assertIn("192.168.1.100:5000", message)
         self.assertIn("LAN/Wi-Fi", message)
+
+    def test_incoming_private_message_routes_to_its_separate_chat(self):
+        client = MessengerClient.__new__(MessengerClient)
+        client.username = "Vali"
+        client.private_histories = {}
+        client.private_windows = {}
+        opened_chats = []
+        client._open_private_chat = opened_chats.append
+        client._append = lambda *_args, **_kwargs: self.fail(
+            "Private messages must not appear in the public chat."
+        )
+        message = {
+            "id": 42,
+            "type": "private_message",
+            "sender": "Ali",
+            "receiver": "Vali",
+            "message": "Salom",
+        }
+
+        client._display_chat_message(message)
+        client._display_chat_message(message)
+
+        self.assertEqual(opened_chats, ["Ali"])
+        self.assertEqual(client.private_histories["Ali"], [message])
 
 
 if __name__ == "__main__":
