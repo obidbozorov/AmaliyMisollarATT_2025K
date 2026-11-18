@@ -1,12 +1,15 @@
 import asyncio
+import queue
 import sqlite3
 import struct
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 
 from protocol import read_message, write_message
-from server import ChatServer
+from server import ChatServer, ServerGUI
 
 
 class ServerTests(unittest.IsolatedAsyncioTestCase):
@@ -105,6 +108,12 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.server.clients.keys(), {"Vali"})
         self.assertIsNotNone(reader)
 
+    async def test_user_change_callback_tracks_online_clients(self):
+        changes = []
+        self.server.on_clients_changed = changes.append
+        await self.connect("Ali")
+        self.assertIn(["Ali"], changes)
+
     async def test_malformed_json_does_not_stop_server(self):
         reader, writer = await asyncio.open_connection("127.0.0.1", self.server.port)
         self.clients.append(writer)
@@ -135,6 +144,39 @@ class ServerTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(len(self.server.clients), 10)
         self.assertEqual(len(sessions), 10)
+
+
+class ServerGUIThreadTests(unittest.TestCase):
+    def test_gui_server_worker_starts_and_stops_cleanly(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            gui = ServerGUI.__new__(ServerGUI)
+            gui.events = queue.Queue()
+            gui.stop_requested = threading.Event()
+            worker = threading.Thread(
+                target=gui._server_thread,
+                args=("127.0.0.1", 0, Path(temp_dir) / "gui-test.db"),
+                daemon=True,
+            )
+            worker.start()
+            started = False
+            deadline = time.monotonic() + 5
+            try:
+                while time.monotonic() < deadline:
+                    try:
+                        event, _ = gui.events.get(timeout=0.1)
+                    except queue.Empty:
+                        continue
+                    if event == "started":
+                        started = True
+                        break
+                    if event == "server_error":
+                        self.fail("GUI server worker failed to start.")
+                self.assertTrue(started, "GUI server worker did not report startup.")
+            finally:
+                gui.stop_requested.set()
+                worker.join(timeout=5)
+
+            self.assertFalse(worker.is_alive(), "GUI server worker did not stop.")
 
 
 if __name__ == "__main__":
