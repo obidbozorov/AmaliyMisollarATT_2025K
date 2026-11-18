@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import errno
 import queue
 import threading
 import tkinter as tk
@@ -11,6 +12,29 @@ from typing import Any
 
 from config import DEFAULT_PORT
 from protocol import ProtocolError, read_message, write_message
+
+
+def _describe_connection_error(host: str, port: int, error: OSError) -> str:
+    """Translate common connection failures into actionable GUI guidance."""
+    address = f"{host}:{port}"
+    winerror = getattr(error, "winerror", None)
+    if (
+        isinstance(error, ConnectionRefusedError)
+        or winerror in (10061, 1225)
+        or error.errno in (errno.ECONNREFUSED, 10061, 1225)
+    ):
+        return (
+            f"{address} manzilida server ulanishni rad etdi. Server kompyuterida "
+            "server.py ishlayotganini, klientdagi IP/port to‘g‘riligini va "
+            f"Windows Firewall’da TCP {port} portiga ruxsat borligini tekshiring. "
+            f"Tafsilot: {error}"
+        )
+    if isinstance(error, asyncio.TimeoutError):
+        return (
+            f"{address} manzilidan javob kelmadi. IP-manzil, bir xil LAN/Wi-Fi "
+            f"tarmog‘i va TCP {port} firewall qoidasini tekshiring."
+        )
+    return f"{address} serveriga ulanib bo‘lmadi: {error}"
 
 
 class MessengerClient:
@@ -164,8 +188,10 @@ class MessengerClient:
     ) -> None:
         try:
             asyncio.run(self._network_session(host, port, username, outgoing, stop_event, events))
-        except (OSError, ConnectionError, asyncio.TimeoutError, ProtocolError) as exc:
-            events.put(("disconnected", str(exc) or "Server bilan aloqa uzildi."))
+        except (OSError, ConnectionError, asyncio.TimeoutError) as exc:
+            events.put(("disconnected", _describe_connection_error(host, port, exc)))
+        except ProtocolError as exc:
+            events.put(("disconnected", f"Server protokoli xatosi: {exc}"))
         finally:
             events.put(("network_closed", None))
 
@@ -212,7 +238,7 @@ class MessengerClient:
             await asyncio.gather(*pending, return_exceptions=True)
         except (asyncio.IncompleteReadError, ConnectionError, OSError) as exc:
             if not stop_event.is_set():
-                events.put(("disconnected", str(exc) or "Server bilan aloqa uzildi."))
+                events.put(("disconnected", _describe_connection_error(host, port, exc)))
         finally:
             stop_event.set()
             for task in (sender, receiver):

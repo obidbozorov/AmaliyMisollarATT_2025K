@@ -44,6 +44,15 @@ New-NetFirewallRule -DisplayName "LAN Messenger TCP 5000" -Direction Inbound -Pr
 
 Mijozlar server bilan bir LAN/Wi-Fi ichida bo‘lishi kerak. Windows tarmoq profilini **Private** qilib belgilang. Bu qoidani faqat ishonchli LAN uchun ishlating.
 
+## Ulanish muammolari
+
+`WinError 1225` yoki “server ulanishni rad etdi” xabari odatda ko‘rsatilgan IP/portda server tinglamayotganini yoki ulanishni firewall rad etayotganini bildiradi:
+
+1. Server kompyuterida `py -3.11 server.py` oynasi ochiq qolganini, `0.0.0.0:5000` da tinglayotganini tekshiring.
+2. Klientda `127.0.0.1` emas, server kompyuterining `ipconfig` orqali olingan IPv4 manzilini kiriting (agar klient va server bitta kompyuterda bo‘lmasa).
+3. Klient kompyuteridan PowerShell’da `Test-NetConnection <server-ip> -Port 5000` buyrug‘ini bajaring. `TcpTestSucceeded: True` bo‘lishi kerak.
+4. Server Windows Firewall qoidasining **Private** profil uchun yoqilganini va ikkala qurilma bir LAN/Wi-Fi’da ekanini tekshiring.
+
 ## Testlar
 
 Loyiha katalogida:

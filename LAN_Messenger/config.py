@@ -1,6 +1,6 @@
 """Default settings for the LAN messenger."""
 
-DEFAULT_HOST = "0.0.0.0"
+DEFAULT_HOST = "192.168.63.161"
 DEFAULT_PORT = 5000
 MAX_CLIENTS = 100
 MAX_MESSAGE_LENGTH = 4000
